@@ -33,8 +33,8 @@ Controllable: Patterns of remote control
 
 """
 
-from hfos.schemata.defaultform import defaultform
-from hfos.schemata.base import base_object
+from isomer.schemata.defaultform import defaultform
+from isomer.schemata.base import base_object
 
 ControllableSchema = base_object('controllable')
 

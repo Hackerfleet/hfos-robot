@@ -34,8 +34,8 @@ Controller: Remote control input device to controllable mapping
 
 """
 
-from hfos.schemata.defaultform import defaultform
-from hfos.schemata.base import base_object, uuid_object
+from isomer.schemata.defaultform import defaultform
+from isomer.schemata.base import base_object, uuid_object
 
 ControllerSchema = base_object('controller')
 

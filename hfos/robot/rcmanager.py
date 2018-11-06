@@ -32,24 +32,24 @@ Chat manager
 
 """
 
-from hfos.robot.events import control_update
+from isomer.robot.events import control_update
 
-from hfos.component import ConfigurableComponent, authorizedevent, handler
-from hfos.events.client import send
-from hfos.logger import warn, critical
+from isomer.component import ConfigurableComponent, authorized_event, handler
+from isomer.events.client import send
+from isomer.logger import warn, critical
 
 
 # Remote Control events
 
-class control_request(authorizedevent):
+class control_request(authorized_event):
     """A client wants to remote control a servo"""
 
 
-class control_release(authorizedevent):
+class control_release(authorized_event):
     """A client wants to remote control a servo"""
 
 
-class data(authorizedevent):
+class data(authorized_event):
     """A client wants to remote control a servo"""
 
 
@@ -63,7 +63,7 @@ class RemoteControlManager(ConfigurableComponent):
     """
 
     configprops = {}
-    channel = "hfosweb"
+    channel = 'isomer-web'
 
     def __init__(self, *args):
         super(RemoteControlManager, self).__init__("RCM", *args)

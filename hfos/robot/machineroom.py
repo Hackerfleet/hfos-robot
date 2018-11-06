@@ -36,23 +36,24 @@ NeoCortex board.
 
 import sys
 
+# TODO: Kick out 2.x compat
 import six
 from circuits.io import Serial
 from circuits.io.events import write
 from random import randint
 
 import glob
-from hfos.component import ConfigurableComponent
-from hfos.component import handler
-from hfos.logger import hfoslog, critical, debug, warn
+from isomer.component import ConfigurableComponent
+from isomer.component import handler
+from isomer.logger import isolog, critical, debug, warn
 
 try:
     import serial
 except ImportError:
     serial = None
-    hfoslog("No serial port found. Serial bus remote control devices will be "
+    isolog("No serial port found. Serial bus remote control devices will be "
             "unavailable, install requirements.txt!",
-            lvl=critical, emitter="MR")
+           lvl=critical, emitter="MR")
 
 
 def serial_ports():
@@ -127,6 +128,7 @@ class Machineroom(ConfigurableComponent):
     version = b'v'
     message = b'm'
     sep = b','
+    # TODO: Kick out 2.x compat
     if six.PY2:
         terminator = chr(13)
     else:
