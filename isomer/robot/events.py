@@ -3,7 +3,7 @@
 
 # HFOS - Hackerfleet Operating System
 # ===================================
-# Copyright (C) 2011-2018 Heiko 'riot' Weinen <riot@c-base.org> and others.
+# Copyright (C) 2011-2019 Heiko 'riot' Weinen <riot@c-base.org> and others.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -21,29 +21,36 @@
 __author__ = "Heiko 'riot' Weinen"
 __license__ = "AGPLv3"
 
-"""
-Schema: Controllable
-====================
-
-Contains
---------
-
-Controllable: Patterns of remote control
+from circuits import Event
 
 
-"""
+class machineroom_event(Event):
+    """
 
-from isomer.schemata.defaultform import defaultform
-from isomer.schemata.base import base_object
+    :param value:
+    :param args:
+    """
 
-ControllableSchema = base_object('controllable')
+    def __init__(self, value, *args):
+        super(machineroom_event, self).__init__(*args)
+        self.controlvalue = value
 
-ControllableSchema['properties'].update({
-    'description': {'type': 'string'},
-    'type': {'enum': ['analog', 'digital']},
-    'min': {'type': 'integer', 'default': 0},
-    'center': {'type': 'integer', 'default': 127},
-    'max': {'type': 'integer', 'default': 255},
-})
 
-Controllable = {'schema': ControllableSchema, 'form': defaultform}
+class machine(machineroom_event):
+    """Skipper wants us to change the engine speed/direction"""
+
+
+class pump(machineroom_event):
+    """Skipper wants us to turn on/off the coolant pump"""
+
+
+class rudder(machineroom_event):
+    """Skipper wants us to change the rudder angle"""
+
+
+class control_update(Event):
+    """A client wants to remote control a servo"""
+
+    def __init__(self, controldata, *args):
+        super(control_update, self).__init__(*args)
+        self.controldata = controldata
