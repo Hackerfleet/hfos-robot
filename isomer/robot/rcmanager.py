@@ -3,7 +3,7 @@
 
 # HFOS - Hackerfleet Operating System
 # ===================================
-# Copyright (C) 2011-2018 Heiko 'riot' Weinen <riot@c-base.org> and others.
+# Copyright (C) 2011-2019 Heiko 'riot' Weinen <riot@c-base.org> and others.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -97,14 +97,14 @@ class RemoteControlManager(ConfigurableComponent):
             self.log("Success!")
             self.remote_controller = client_uuid
             self.fireEvent(send(client_uuid, {
-                'component': 'hfos.robot.rcmanager',
+                'component': 'isomer.robot.rcmanager',
                 'action': 'control_request',
                 'data': True
             }))
         else:
             self.log("No, we're already being remote controlled!")
             self.fireEvent(send(client_uuid, {
-                'component': 'hfos.robot.rcmanager',
+                'component': 'isomer.robot.rcmanager',
                 'action': 'control_request',
                 'data': False
             }))
@@ -123,7 +123,7 @@ class RemoteControlManager(ConfigurableComponent):
             # TODO: Switch to a possible fallback controller
             self.remote_controller = None
             self.fireEvent(send(client_uuid, {
-                'component': 'hfos.robot.rcmanager',
+                'component': 'isomer.robot.rcmanager',
                 'action': 'control_release',
                 'data': True
             }))
@@ -136,6 +136,7 @@ class RemoteControlManager(ConfigurableComponent):
         self.log("Control data received: ", control_data)
         if event.client.uuid == self.remote_controller:
             self.log("Valid data, handing on to machineroom.")
+
             self.fireEvent(control_update(control_data), "machineroom")
         else:
             self.log("Invalid control data update request!", lvl=warn)
