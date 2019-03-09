@@ -3,7 +3,7 @@
 
 # HFOS - Hackerfleet Operating System
 # ===================================
-# Copyright (C) 2011-2018 Heiko 'riot' Weinen <riot@c-base.org> and others.
+# Copyright (C) 2011-2019 Heiko 'riot' Weinen <riot@c-base.org> and others.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -45,14 +45,14 @@ from random import randint
 import glob
 from isomer.component import ConfigurableComponent
 from isomer.component import handler
-from isomer.logger import isolog, critical, debug, warn
+from isomer.logger import isolog, critical, debug, warn, verbose
 
 try:
     import serial
 except ImportError:
     serial = None
     isolog("No serial port found. Serial bus remote control devices will be "
-            "unavailable, install requirements.txt!",
+           "unavailable, install requirements.txt!",
            lvl=critical, emitter="MR")
 
 
@@ -101,7 +101,6 @@ class Machineroom(ConfigurableComponent):
 
     channel = "machineroom"
 
-    ports = serial_ports()
     configprops = {
         'baudrate': {
             'type': 'integer',
@@ -116,10 +115,10 @@ class Machineroom(ConfigurableComponent):
             'default': 4096
         },
         'serialfile': {
-            'enum': ports + [''],
+            'type': 'string',
             'title': 'Serial port device',
             'description': 'File descriptor to access serial port',
-            'default': ''
+            'default': '/dev/ttyACM0'
         },
     }
 
@@ -139,10 +138,41 @@ class Machineroom(ConfigurableComponent):
         super(Machineroom, self).__init__('MR', *args, **kwargs)
         self.log("Machineroom starting")
 
-        self._rudder_channel = 1
-        self._machine_channel = 2
-        self._pump_channel = 3  # TODO: Make this a dedicated singleton call?
+        self.maestro = True
+
+        self.targets = {
+            'machine': 1,
+            'rudder': 0,
+            'pump': 2
+        }
+
+        self.controller_mapping = {
+            'axes': {
+                1: {
+                    'name': 'machine',
+                    'flags': ['inverted'],
+                },
+                2: {
+                    'name': 'rudder'
+                }
+            },
+            'buttons': {
+                3: {
+                    'name': 'pump'
+                }
+            }
+        }
+
+        self._rudder_channel = 0
+        self._machine_channel = 1
+        self._pump_channel = 2  # TODO: Make this a dedicated singleton call?
         #  e.g. pumpon/pumpoff.. not so generic
+
+        self._values = {}
+
+        for item in self.targets.values():
+            self._values[item] = 0
+
         self._serial_open = False
 
         if self.config.serialfile != '':
@@ -151,6 +181,9 @@ class Machineroom(ConfigurableComponent):
                                      self.config.baudrate,
                                      self.config.buffersize, timeout=5,
                                      channel="port").register(self)
+
+                # Workaround for https://github.com/circuits/circuits/issues/252
+                # self.serial._encoding = 'ascii'
             except Exception as e:
                 self.log("Problem with serial port: ", e, type(e),
                          lvl=critical)
@@ -164,10 +197,20 @@ class Machineroom(ConfigurableComponent):
             self.log("Cannot transmit, serial port not available!", lvl=warn)
             return
 
-        cmd = command + self.terminator
+        if not isinstance(command, bytes):
+            command = bytes(command, encoding='ascii')
+
+        if not self.maestro:
+            cmd = command + self.terminator
+        else:
+            cmd = command
         # cmdbytes = bytes(cmd, encoding="ascii")
 
         self.log("Transmitting bytes: ", "\n", cmd, lvl=critical)
+        if len(cmd) != 3:
+            self.log('Illegal command:', cmd, lvl=critical)
+            return
+
         self.fireEvent(write(cmd), "port")
 
     @handler("opened", channel="port")
@@ -178,16 +221,19 @@ class Machineroom(ConfigurableComponent):
         """
         self._serial_open = True
 
-        self.log("Opened: ", args, lvl=debug)
-        self._send_command(b'l,1')  # Saying hello, shortly
-        self.log("Turning off engine, pump and neutralizing rudder")
-        self._send_command(b'v')
+        if not self.maestro:
+            self.log("Opened: ", args, lvl=debug)
+            self._send_command(b'l,1')  # Saying hello, shortly
+            self.log("Turning off engine, pump and neutralizing rudder")
+            self._send_command(b'v')
         self._handle_servo(self._machine_channel, 0)
         self._handle_servo(self._rudder_channel, 127)
         self._set_digital_pin(self._pump_channel, 0)
-        # self._send_command(b'h')
-        self._send_command(b'l,0')
-        self._send_command(b'm,HFOS Control')
+
+        if not self.maestro:
+            # self._send_command(b'h')
+            self._send_command(b'l,0')
+            self._send_command(b'm,HFOS Control')
 
     def _handle_servo(self, channel, value):
         """
@@ -195,9 +241,17 @@ class Machineroom(ConfigurableComponent):
         :param channel:
         :param value:
         """
-        self._send_command(
-            self.servo + self.sep + bytes([channel]) + self.sep + bytes(
-                [value]))
+        if self.maestro:
+            # lsb = value & 0x7f  # 7 bits for least significant byte
+            # msb = (value >> 7) & 0x7f  # shift 7 and take next 7 bits for msb
+            # command = chr(0x04) + chr(channel) + chr(lsb) + chr(msb)
+            value = min(value, 255)
+            command = bytes([0xff]) + bytes([channel]) + bytes([value])
+        else:
+            command = self.servo + self.sep + bytes([channel]) + self.sep + bytes(
+                [value])
+
+        self._send_command(command)
 
     def _set_digital_pin(self, pin, value):
         """
@@ -206,8 +260,12 @@ class Machineroom(ConfigurableComponent):
         :param value:
         """
         mode = 255 if value >= 127 else 0
-        self._send_command(
-            self.pin + self.sep + bytes([pin]) + self.sep + bytes([mode]))
+
+        if not self.maestro:
+            self._send_command(
+                self.pin + self.sep + bytes([pin]) + self.sep + bytes([mode]))
+        else:
+            self._handle_servo(pin, mode)
 
     @handler("control_update")
     def on_control_update(self, event):
@@ -217,7 +275,35 @@ class Machineroom(ConfigurableComponent):
 
         :param event: machine_update
         """
-        self.log("Control update request: ", event.controldata, lvl=critical)
+        self.log("Control update request: ", event.controldata, lvl=verbose)
+
+        for key, item in self.controller_mapping['axes'].items():
+            raw_value = event.controldata['axes'][key]
+            if raw_value < -1 or raw_value > 1:
+                self.log('Incorrect control value received:', raw_value, lvl=warn)
+                return
+
+            if 'inverted' in item.get('flags', []):
+                new_value = min(128 - int(raw_value * 128), 255)
+            else:
+                new_value = min(128 + int(raw_value * 128), 255)
+            name = item['name']
+            target = self.targets[name]
+
+            if self._values[target] != new_value:
+                self.log('Setting %s (%i) to %i' % (name, target, new_value), lvl=debug)
+                self._handle_servo(target, new_value)
+                self._values[target] = new_value
+
+        for key, item in self.controller_mapping['buttons'].items():
+            new_value = event.controldata['buttons'][key]
+            name = item['name']
+            target = self.targets[name]
+
+            if self._values[target] != new_value:
+                self.log('Setting %s (%i) to %i' % (name, target, new_value), lvl=debug)
+                self._set_digital_pin(target, new_value)
+                self._values[target] = new_value
 
     @handler("machine")
     def on_machinerequest(self, event):
@@ -228,6 +314,7 @@ class Machineroom(ConfigurableComponent):
         """
         self.log("Updating new machine power: ", event.controlvalue)
         self._handle_servo(self._machine_channel, event.controlvalue)
+        self._values['machine'] = event.controlvalue
 
     @handler("rudder")
     def on_rudderrequest(self, event):
@@ -238,6 +325,7 @@ class Machineroom(ConfigurableComponent):
         """
         self.log("Updating new rudder angle: ", event.controlvalue)
         self._handle_servo(self._rudder_channel, event.controlvalue)
+        self._values['rudder'] = event.controlvalue
 
     @handler("pump")
     def on_pumprequest(self, event):
@@ -248,6 +336,7 @@ class Machineroom(ConfigurableComponent):
         """
         self.log("Updating pump status: ", event.controlvalue)
         self._set_digital_pin(self._pump_channel, event.controlvalue)
+        self._values['pump'] = event.controlvalue
 
     @handler("read", channel="port")
     def read(self, *args):
