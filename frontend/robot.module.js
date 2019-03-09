@@ -1,7 +1,9 @@
+import './remotecontrol/robot.scss';
+
 import angular from 'angular';
 import uirouter from 'angular-ui-router';
 
-import { routing } from './robot.config.js';
+import {routing} from './robot.config.js';
 
 import remotecontrolcomponent from './remotecontrol/remotecontrol.js';
 import template from './remotecontrol/remotecontrol.tpl.html';

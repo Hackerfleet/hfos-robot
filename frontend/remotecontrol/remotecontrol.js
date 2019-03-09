@@ -14,7 +14,10 @@ class remotecontrolcomponent {
         this.controlActive = false;
         this.controlling = false;
         this.activeGamepad = 0;
+
         this.axes = '';
+        this.buttons = '';
+
         this.status = 'Not connected';
         this.controldata = {};
 
@@ -53,7 +56,7 @@ class remotecontrolcomponent {
              }*/
         }
 
-        this.socket.listen('hfos.robot.rcmanager', handle_response);
+        this.socket.listen('isomer.robot.rcmanager', handle_response);
 
         let haveEvents = 'ongamepadconnected' in window;
         let controllers = {};
@@ -82,7 +85,7 @@ class remotecontrolcomponent {
             b.className = 'buttons';
             for (let i = 0; i < gamepad.buttons.length; i++) {
                 let e = document.createElement('span');
-                e.className = 'button';
+                e.className = 'game-button';
                 //e.id = 'b' + i;
                 e.innerHTML = i;
                 b.appendChild(e);
@@ -139,7 +142,7 @@ class remotecontrolcomponent {
                 let controller = controllers[j];
 
                 let d = document.getElementById('controller' + j);
-                let buttons = d.getElementsByClassName('button');
+                let buttons = d.getElementsByClassName('game-button');
 
                 for (i = 0; i < controller.buttons.length; i++) {
                     let b = buttons[i];
@@ -154,9 +157,9 @@ class remotecontrolcomponent {
                     b.style.backgroundSize = pct + ' ' + pct;
 
                     if (pressed) {
-                        b.className = 'button pressed';
+                        b.className = 'game-button game-button-pressed';
                     } else {
-                        b.className = 'button';
+                        b.className = 'game-button';
                     }
                 }
 
@@ -179,7 +182,7 @@ class remotecontrolcomponent {
                 console.log('Setting up initial axes');
                 return true;
             } else {
-                let margin = 0.23;
+                let margin = 0.1;
                 let oldaxes = self.axes;
 
                 for (let i = 0; i < self.axes.length; i++) {
@@ -190,6 +193,23 @@ class remotecontrolcomponent {
                 return false;
             }
         }
+
+        function checkbuttons(newbuttons) {
+            if (self.buttons === '') {
+                console.log('Setting up initial buttons');
+                return true;
+            } else {
+                let oldbuttons = self.buttons;
+
+                for (let i = 0; i < self.buttons.length; i++) {
+                    if (oldbuttons[i] !== newbuttons[i]) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
 
         function scangamepads() {
             let gamepads = navigator.getGamepads ? navigator.getGamepads() : (navigator.webkitGetGamepads ? navigator.webkitGetGamepads() : []);
@@ -203,11 +223,22 @@ class remotecontrolcomponent {
                 }
             }
             if (self.controlling === true) {
-                let newaxes = gamepads[self.activeGamepad].axes;
-                if (checkAxes(newaxes) === true) {
-                    console.log('Updating axes: ', newaxes);
-                    self.axes = newaxes;
-                    self.socket.send({component: 'hfos.robot.rcmanager', action: 'data', data: newaxes});
+                let gamepad = gamepads[self.activeGamepad];
+                let new_axes = gamepad.axes;
+                let new_buttons = [];
+                for (let i = 0; i < gamepad.buttons.length; i++) {
+                    new_buttons.push(gamepad.buttons[i].pressed)
+                }
+                ;
+                if ((checkAxes(new_axes) === true) || (checkbuttons(new_buttons) === true)) {
+                    console.log('Updating control data: ', new_axes, new_buttons);
+                    self.axes = new_axes;
+                    self.buttons = new_buttons;
+                    self.socket.send({
+                        component: 'isomer.robot.rcmanager',
+                        action: 'data',
+                        data: {axes: new_axes, buttons: new_buttons}
+                    });
                 }
             }
         }
@@ -227,9 +258,9 @@ class remotecontrolcomponent {
     toggleControl() {
         console.log('Toggling remote control');
         if (this.controlActive === true) {
-            this.socket.send({component: 'hfos.robot.rcmanager', action: 'control_request', data: ''});
+            this.socket.send({component: 'isomer.robot.rcmanager', action: 'control_request', data: ''});
         } else {
-            this.socket.send({component: 'hfos.robot.rcmanager', action: 'control_release', data: ''});
+            this.socket.send({component: 'isomer.robot.rcmanager', action: 'control_release', data: ''});
         }
     }
 }
